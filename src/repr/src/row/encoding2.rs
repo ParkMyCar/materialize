@@ -1241,8 +1241,13 @@ impl RowColumnarEncoder {
             .map(|(idx, (col_name, col_type))| {
                 let encoder = scalar_type_to_encoder(&col_type.scalar_type)
                     .expect("failed to create encoder");
+                // Upstream the nullability of columns in views can change
+                // between releases of Materialize. So we durably record all
+                // data as nullable so the types are stable.
+                //
+                // See: <https://github.com/MaterializeInc/database-issues/issues/2488>
                 let encoder = DatumEncoder {
-                    nullable: col_type.nullable,
+                    nullable: true,
                     encoder,
                 };
 
@@ -1863,6 +1868,28 @@ mod tests {
         let empty_desc = RelationDesc::empty();
         let result = <RelationDesc as Schema2<Row>>::encoder(&empty_desc);
         assert_err!(result);
+    }
+
+    #[mz_ore::test]
+    #[cfg_attr(miri, ignore)] // unsupported operation: can't call foreign function `decContextDefault` on OS `linux`
+    fn proptest_data_type_always_nullable() {
+        fn test_case(desc: RelationDesc) {
+            let encoder = <RelationDesc as Schema2<Row>>::encoder(&desc).unwrap();
+            let row_col = encoder.finish();
+
+            let DataType::Struct(children) = row_col.data_type() else {
+                panic!("programming error, wrong type for Row Column");
+            };
+            for child in children {
+                assert!(child.is_nullable());
+            }
+
+            let _ = <RelationDesc as Schema2<Row>>::decoder(&desc, row_col).unwrap();
+        }
+
+        proptest!(|(desc in arb_relation_desc(1..64))| {
+            test_case(desc)
+        })
     }
 
     #[mz_ore::test]
