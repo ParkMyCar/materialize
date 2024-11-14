@@ -66,6 +66,7 @@ impl ToBazelDefinition for BazelHeader {
             writer,
             r#"package(default_visibility = ["//visibility:public"])"#
         )?;
+        writeln!(writer, r#"exports_files(["Cargo.toml"])"#)?;
         writeln!(writer)?;
 
         // TODO(parkmcar): Handle differently named root repositories.

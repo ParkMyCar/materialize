@@ -14,6 +14,8 @@ load("@rules_rust//rust:defs.bzl", "rust_doc_test", "rust_proc_macro", "rust_tes
 
 package(default_visibility = ["//visibility:public"])
 
+exports_files(["Cargo.toml"])
+
 rust_proc_macro(
     name = "mz_lowertest_derive",
     srcs = glob(["src/**/*.rs"]),

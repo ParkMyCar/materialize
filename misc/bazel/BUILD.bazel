@@ -1,1 +1,251 @@
-visibility = ["//visibility:public"]
+load("@rules_rust//crate_universe:defs.bzl", "crate", "crates_vendor")
+
+crates_vendor(
+    name = "crates_io_vendored",
+    annotations = {
+        # `crates_vendor` fails to automatically add the depenency on `tracing` when
+        # `tokio_unstable` is enabled, so we manually specify it.
+        "tokio": [
+            crate.annotation(
+                rustc_flags = ["--cfg=tokio_unstable"],
+                deps = ["@crates_io//:tracing"],
+            ),
+        ],
+        # "decnumber-sys": [crate.annotation(
+        #     additive_build_file = "@//misc/bazel/c_deps:rust-sys/BUILD.decnumber.bazel",
+        #     gen_build_script = False,
+        #     # Note: This is a target we add from the additive build file above.
+        #     deps = [":decnumber"],
+        # )],
+        # "librocksdb-sys": [crate.annotation(
+        #     additive_build_file = "@//misc/bazel/c_deps:rust-sys/BUILD.rocksdb.bazel",
+        #     # Note: The below targets are from the additive build file.
+        #     #
+        #     # HACK(parkmycar): The `librocksdb-sys` build script runs bindgen for us, and to
+        #     # support cross compiling we need to provide the sysroot to the build script so
+        #     # bindgen can find it. Providing the sysroot and relying on the raw paths is quite
+        #     # fragile, the fix is to use `@rules_rust//bindgen/...` rules with our Clang toolchain.
+        #     build_script_data = [
+        #         ":rocksdb_lib",
+        #         ":rocksdb_include",
+        #         ":snappy_lib",
+        #         "@linux_sysroot-aarch64//:sysroot",
+        #         "@linux_sysroot-x86_64//:sysroot",
+        #     ],
+        #     build_script_env = {
+        #         "ROCKSDB_STATIC": "true",
+        #         "ROCKSDB_LIB_DIR": "$(execpath :rocksdb_lib)",
+        #         "ROCKSDB_INCLUDE_DIR": "$(execpath :rocksdb_include)",
+        #         "SNAPPY_STATIC": "true",
+        #         "SNAPPY_LIB_DIR": "$(execpath :snappy_lib)",
+        #         "BINDGEN_EXTRA_CLANG_ARGS_aarch64-unknown-linux-gnu": "--sysroot=external/linux_sysroot-aarch64",
+        #         "BINDGEN_EXTRA_CLANG_ARGS_x86_64-unknown-linux-gnu": "--sysroot=external/linux_sysroot-x86_64",
+        #     },
+        #     compile_data = [
+        #         ":rocksdb_lib",
+        #         ":rocksdb_include",
+        #         ":snappy_lib",
+        #     ],
+        # )],
+        "tikv-jemalloc-sys": [crate.annotation(
+            gen_build_script = False,
+            deps = ["@jemalloc"],
+        )],
+        # "rdkafka-sys": [crate.annotation(
+        #     additive_build_file = "@//misc/bazel/c_deps:rust-sys/BUILD.librdkafka.bazel",
+        #     gen_build_script = False,
+        #     # Note: This is a target we add from the additive build file above.
+        #     deps = [":librdkafka"],
+        # )],
+        "libz-sys": [crate.annotation(
+            gen_build_script = False,
+            deps = ["@zlib"],
+        )],
+        "openssl-sys": [crate.annotation(
+            build_script_data = [
+                "@openssl//:openssl_lib",
+                "@openssl//:openssl_include",
+            ],
+            build_script_data_glob = ["build/**/*.c"],
+            build_script_env = {
+                "OPENSSL_STATIC": "true",
+                "OPENSSL_NO_VENDOR": "1",
+                "OPENSSL_LIB_DIR": "$(execpath @openssl//:openssl_lib)",
+                "OPENSSL_INCLUDE_DIR": "$(execpath @openssl//:openssl_include)",
+            },
+            compile_data = ["@openssl//:openssl_lib"],
+        )],
+        "protobuf-src": [crate.annotation(
+            # Note: We shouldn't ever depend on protobuf-src, but if we do, don't try to bootstrap
+            # `protoc`.
+            gen_build_script = False,
+            rustc_env = {"INSTALL_DIR": "fake"},
+        )],
+        # "protobuf-native": [crate.annotation(
+        #     additive_build_file = "@//misc/bazel/c_deps:rust-sys/BUILD.protobuf-native.bazel",
+        #     gen_build_script = False,
+        #     deps = [":protobuf-native-bridge"],
+        # )],
+        # "psm": [crate.annotation(
+        #     additive_build_file = "@//misc/bazel/c_deps:rust-sys/BUILD.psm.bazel",
+        #     gen_build_script = False,
+        #     # Note: All of the targets we build for support switching stacks, if we ever want to
+        #     # support Windows we'll have to revist this.
+        #     rustc_flags = [
+        #         "--check-cfg=cfg(switchable_stack,asm,link_asm)",
+        #         "--cfg=asm",
+        #         "--cfg=link_asm",
+        #         "--cfg=switchable_stack",
+        #     ],
+        #     # Note: This is a target we add from the additive build file above.
+        #     deps = ["psm_s"],
+        # )],
+        "launchdarkly-server-sdk": [crate.annotation(
+            build_script_env = {
+                "CARGO_PKG_AUTHORS": "LaunchDarkly",
+                "CARGO_PKG_DESCRIPTION": "",
+                "CARGO_PKG_HOMEPAGE": "https://docs.launchdarkly.com/sdk/server-side/rust",
+                "CARGO_PKG_LICENSE": "Apache-2.0",
+                "CARGO_PKG_REPOSITORY": "https://github.com/launchdarkly/rust-server-sdk",
+                "RUSTDOC": "",
+            },
+        )],
+        # Compile the backtrace crate and its dependencies with all optimizations, even in dev
+        # builds, since otherwise backtraces can take 20s+ to symbolize. With optimizations
+        # enabled, symbolizing a backtrace takes less than 1s.
+        "addr2line": [crate.annotation(rustc_flags = ["-Copt-level=3"])],
+        "adler": [crate.annotation(rustc_flags = ["-Copt-level=3"])],
+        "backtrace": [crate.annotation(rustc_flags = ["-Copt-level=3"])],
+        "gimli": [crate.annotation(rustc_flags = ["-Copt-level=3"])],
+        "miniz_oxide": [crate.annotation(rustc_flags = ["-Copt-level=3"])],
+        "object": [crate.annotation(rustc_flags = ["-Copt-level=3"])],
+        "rustc-demangle": [crate.annotation(rustc_flags = ["-Copt-level=3"])],
+    },
+    cargo_lockfile = "//:Cargo.lock",
+    manifests = [
+        "//:Cargo.toml",
+        "//misc/bazel/cargo-gazelle:Cargo.toml",
+        "//src/adapter-types:Cargo.toml",
+        "//src/adapter:Cargo.toml",
+        "//src/alloc-default:Cargo.toml",
+        "//src/alloc:Cargo.toml",
+        "//src/arrow-util:Cargo.toml",
+        "//src/audit-log:Cargo.toml",
+        "//src/avro:Cargo.toml",
+        "//src/aws-secrets-controller:Cargo.toml",
+        "//src/aws-util:Cargo.toml",
+        "//src/balancerd:Cargo.toml",
+        "//src/build-info:Cargo.toml",
+        "//src/build-tools:Cargo.toml",
+        "//src/catalog-debug:Cargo.toml",
+        "//src/catalog:Cargo.toml",
+        "//src/ccsr:Cargo.toml",
+        "//src/cloud-api:Cargo.toml",
+        "//src/cloud-resources:Cargo.toml",
+        "//src/cluster-client:Cargo.toml",
+        "//src/cluster:Cargo.toml",
+        "//src/clusterd:Cargo.toml",
+        "//src/compute-client:Cargo.toml",
+        "//src/compute-types:Cargo.toml",
+        "//src/compute:Cargo.toml",
+        "//src/controller-types:Cargo.toml",
+        "//src/controller:Cargo.toml",
+        "//src/durable-cache:Cargo.toml",
+        "//src/dyncfg-launchdarkly:Cargo.toml",
+        "//src/dyncfg:Cargo.toml",
+        "//src/dyncfgs:Cargo.toml",
+        "//src/environmentd:Cargo.toml",
+        "//src/expr-parser:Cargo.toml",
+        "//src/expr-test-util:Cargo.toml",
+        "//src/expr:Cargo.toml",
+        "//src/fivetran-destination:Cargo.toml",
+        "//src/frontegg-auth:Cargo.toml",
+        "//src/frontegg-client:Cargo.toml",
+        "//src/frontegg-mock:Cargo.toml",
+        "//src/http-util:Cargo.toml",
+        "//src/interchange:Cargo.toml",
+        "//src/kafka-util:Cargo.toml",
+        "//src/lowertest-derive:Cargo.toml",
+        "//src/lowertest:Cargo.toml",
+        "//src/lsp-server:Cargo.toml",
+        "//src/metabase:Cargo.toml",
+        "//src/metrics:Cargo.toml",
+        "//src/mysql-util:Cargo.toml",
+        "//src/mz:Cargo.toml",
+        "//src/npm:Cargo.toml",
+        "//src/orchestrator-kubernetes:Cargo.toml",
+        "//src/orchestrator-process:Cargo.toml",
+        "//src/orchestrator-tracing:Cargo.toml",
+        "//src/orchestrator:Cargo.toml",
+        "//src/orchestratord:Cargo.toml",
+        "//src/ore-proc:Cargo.toml",
+        "//src/ore:Cargo.toml",
+        "//src/persist-cli:Cargo.toml",
+        "//src/persist-client:Cargo.toml",
+        "//src/persist-proc:Cargo.toml",
+        "//src/persist-types:Cargo.toml",
+        "//src/persist:Cargo.toml",
+        "//src/pgcopy:Cargo.toml",
+        "//src/pgrepr-consts:Cargo.toml",
+        "//src/pgrepr:Cargo.toml",
+        "//src/pgtest:Cargo.toml",
+        "//src/pgtz:Cargo.toml",
+        "//src/pgwire-common:Cargo.toml",
+        "//src/pgwire:Cargo.toml",
+        "//src/postgres-client:Cargo.toml",
+        "//src/postgres-util:Cargo.toml",
+        "//src/prof-http:Cargo.toml",
+        "//src/prof:Cargo.toml",
+        "//src/proto:Cargo.toml",
+        "//src/regexp:Cargo.toml",
+        "//src/repr-test-util:Cargo.toml",
+        "//src/repr:Cargo.toml",
+        "//src/rocksdb-types:Cargo.toml",
+        "//src/rocksdb:Cargo.toml",
+        "//src/s3-datagen:Cargo.toml",
+        "//src/secrets:Cargo.toml",
+        "//src/segment:Cargo.toml",
+        "//src/server-core:Cargo.toml",
+        "//src/service:Cargo.toml",
+        "//src/sql-lexer:Cargo.toml",
+        "//src/sql-parser:Cargo.toml",
+        "//src/sql-pretty:Cargo.toml",
+        "//src/sql:Cargo.toml",
+        "//src/sqllogictest:Cargo.toml",
+        "//src/ssh-util:Cargo.toml",
+        "//src/storage-client:Cargo.toml",
+        "//src/storage-controller:Cargo.toml",
+        "//src/storage-operators:Cargo.toml",
+        "//src/storage-types:Cargo.toml",
+        "//src/storage:Cargo.toml",
+        "//src/testdrive:Cargo.toml",
+        "//src/timely-util:Cargo.toml",
+        "//src/timestamp-oracle:Cargo.toml",
+        "//src/tls-util:Cargo.toml",
+        "//src/tracing:Cargo.toml",
+        "//src/transform:Cargo.toml",
+        "//src/txn-wal:Cargo.toml",
+        "//src/walkabout:Cargo.toml",
+        "//src/workspace-hack:Cargo.toml",
+        "//test/metabase/smoketest:Cargo.toml",
+        "//test/test-util:Cargo.toml",
+    ],
+    # Vendor just the generated `BUILD.bazel` files, not the source of all
+    # third-party dependencies.
+    mode = "remote",
+    # Restricting the set of platform triples we support _greatly_ reduces the
+    # time it takes to "Splice Cargo Workspace" because it reduces the amount
+    # of metadata that needs to be collected.
+    #
+    # Feel free to add more targets if need be but try to keep this list small.
+    supported_platform_triples = [
+        "aarch64-unknown-linux-gnu",
+        "x86_64-unknown-linux-gnu",
+        "aarch64-apple-darwin",
+        "x86_64-apple-darwin",
+        "wasm32-unknown-unknown",
+    ],
+    vendor_path = "/misc/bazel/vendored",
+    # Only used if developing rules_rust.
+    # generator = "@cargo_bazel_bootstrap//:cargo-bazel",
+)

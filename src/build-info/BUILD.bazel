@@ -13,6 +13,8 @@ load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
 package(default_visibility = ["//visibility:public"])
 
+exports_files(["Cargo.toml"])
+
 rust_library(
     name = "mz_build_info",
     srcs = glob(["src/**/*.rs"]),
