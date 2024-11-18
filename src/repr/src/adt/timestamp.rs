@@ -1199,6 +1199,32 @@ mod test {
     }
 
     #[mz_ore::test]
+    fn proptest_packed_naive_date_time_roundtrips2_micros() {
+        let naive_date_time_strat =
+            (-8334601228800000000i64..=8210266876799999999i64).prop_map(|micros| {
+                chrono::NaiveDateTime::from_timestamp_micros(micros).expect("valid")
+            });
+
+        proptest!(|(timestamp in naive_date_time_strat)| {
+            let packed = PackedNaiveDateTime::from_value(timestamp);
+            let rnd = packed.into_value();
+            prop_assert_eq!(timestamp, rnd);
+        });
+    }
+
+    #[mz_ore::test]
+    fn proptest_packed_naive_date_time_roundtrips2_nanos() {
+        let naive_date_time_strat = any::<i64>()
+            .prop_map(|nanos| chrono::NaiveDateTime::from_timestamp_nanos(nanos).expect("valid"));
+
+        proptest!(|(timestamp in naive_date_time_strat)| {
+            let packed = PackedNaiveDateTime::from_value(timestamp);
+            let rnd = packed.into_value();
+            prop_assert_eq!(timestamp, rnd);
+        });
+    }
+
+    #[mz_ore::test]
     fn proptest_packed_naive_date_time_roundtrips() {
         proptest!(|(timestamp in arb_naive_date_time())| {
             let packed = PackedNaiveDateTime::from_value(timestamp);
