@@ -1937,7 +1937,10 @@ impl Schema2<SourceData> for RelationDesc {
 mod tests {
     use arrow::array::{build_compare, ArrayData};
     use bytes::Bytes;
+    use mz_dyncfg::ConfigSet;
     use mz_ore::assert_err;
+    use mz_ore::lgbytes::LgBytesMetrics;
+    use mz_ore::metrics::MetricsRegistry;
     use mz_persist::indexed::columnar::arrow::realloc_array;
     use mz_persist::metrics::ColumnarMetrics;
     use mz_persist_types::parquet::EncodingConfig;
@@ -1963,7 +1966,12 @@ mod tests {
 
     #[track_caller]
     fn roundtrip_source_data(desc: RelationDesc, datas: Vec<SourceData>, config: &EncodingConfig) {
-        let metrics = ColumnarMetrics::disconnected();
+        let registry = MetricsRegistry::new();
+        let lgbytes = LgBytesMetrics::new(&registry);
+        let cfg = mz_persist::cfg::all_dyn_configs(ConfigSet::default());
+        // Enable CC sizes so we actually try to realloc buffers.
+        let metrics = ColumnarMetrics::new(&registry, &lgbytes, Arc::new(cfg), true);
+
         let mut encoder = <RelationDesc as Schema2<SourceData>>::encoder(&desc).unwrap();
         for data in &datas {
             encoder.append(data);
