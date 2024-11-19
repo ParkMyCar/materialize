@@ -2022,6 +2022,11 @@ mod tests {
             .unwrap()
             .clone();
 
+        // Try generating stats for the data, just to make sure we don't panic.
+        let _x = <RelationDesc as Schema2<SourceData>>::decoder_any(&desc, &rnd_col)
+            .expect("valid decoder")
+            .stats();
+
         // Read back all of our data and assert it roundtrips.
         let mut rnd_data = SourceData(Ok(Row::default()));
         let decoder = <RelationDesc as Schema2<SourceData>>::decoder(&desc, rnd_col).unwrap();
