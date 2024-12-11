@@ -12,7 +12,7 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
-use arrow::array::{new_null_array, Array, AsArray, ListArray, NullArray, StructArray};
+use arrow::array::{new_null_array, Array, AsArray, ListArray, StructArray};
 use arrow::datatypes::{DataType, Field, FieldRef, Fields, SchemaBuilder};
 use itertools::Itertools;
 use mz_ore::cast::CastFrom;
@@ -98,8 +98,6 @@ pub(crate) enum ArrayMigration {
     NoOp,
     Struct(Vec<StructArrayMigration>),
     List(FieldRef, Box<ArrayMigration>),
-    /// Replace the array with a [`NullArray`].
-    ReplaceWithNull,
 }
 
 #[derive(Debug, PartialEq)]
@@ -131,7 +129,6 @@ impl ArrayMigration {
             NoOp => false,
             Struct(xs) => xs.iter().any(|x| x.contains_drop()),
             List(_f, x) => x.contains_drop(),
-            ReplaceWithNull => true,
         }
     }
 
@@ -164,7 +161,17 @@ impl ArrayMigration {
                 for migration in migrations {
                     migration.migrate(len, &mut fields, &mut arrays);
                 }
-                Arc::new(StructArray::new(fields, arrays, nulls))
+                assert_eq!(
+                    fields.len(),
+                    arrays.len(),
+                    "invalid migration, fields and arrays mismatched"
+                );
+
+                if fields.is_empty() {
+                    Arc::new(StructArray::new_empty_fields(len, nulls))
+                } else {
+                    Arc::new(StructArray::new(fields, arrays, nulls))
+                }
             }
             List(field, entry_migration) => {
                 let list_array: ListArray = if let Some(list_array) = array.as_list_opt() {
@@ -179,7 +186,6 @@ impl ArrayMigration {
                 let entries = entry_migration.migrate(entries);
                 Arc::new(ListArray::new(Arc::clone(field), offsets, entries, nulls))
             }
-            ReplaceWithNull => Arc::new(NullArray::new(array.len())),
         }
     }
 }
@@ -264,7 +270,7 @@ fn backward_compatible_typ(old: &DataType, new: &DataType) -> Option<ArrayMigrat
         (FixedSizeBinary(o), FixedSizeBinary(n)) => (o == n).then_some(NoOp),
         (FixedSizeBinary(_), _) => None,
         (Struct(o), Struct(n)) => backward_compatible_struct(o, n),
-        (Struct(_), Null) => Some(ArrayMigration::ReplaceWithNull),
+        (Struct(o), Null) => backward_compatible_struct(o, &Fields::empty()),
         (Struct(_), _) => None,
         (List(o), List(n)) | (Map(o, _), List(n)) => {
             // The list migration can proceed if the entry types are compatible and the
@@ -357,7 +363,6 @@ fn backward_compatible_struct(old: &Fields, new: &Fields) -> Option<ArrayMigrati
                 fn recursively_all_nullable(migration: &ArrayMigration) -> bool {
                     match migration {
                         NoOp => true,
-                        ReplaceWithNull => false,
                         List(_field, child) => recursively_all_nullable(child),
                         Struct(children) => children.iter().all(|child| match child {
                             AddFieldNullableAtEnd { .. } | DropField { .. } => false,

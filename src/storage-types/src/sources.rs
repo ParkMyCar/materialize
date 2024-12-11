@@ -26,6 +26,7 @@ use itertools::Itertools;
 use kafka::KafkaSourceExportDetails;
 use load_generator::{LoadGeneratorOutput, LoadGeneratorSourceExportDetails};
 use mz_ore::assert_none;
+use mz_persist_types::arrow::ArrayOrd;
 use mz_persist_types::columnar::{ColumnDecoder, ColumnEncoder, Schema2};
 use mz_persist_types::stats::{
     ColumnNullStats, ColumnStatKinds, ColumnarStats, PrimitiveStats, StructStats,
@@ -1665,10 +1666,10 @@ impl SourceDataRowColumnarDecoder {
         }
     }
 
-    pub fn byte_size(&self) -> usize {
+    pub fn goodbytes(&self) -> usize {
         let self_size = std::mem::size_of::<SourceDataRowColumnarDecoder>();
         match self {
-            SourceDataRowColumnarDecoder::Row(decoder) => self_size + decoder.byte_size(),
+            SourceDataRowColumnarDecoder::Row(decoder) => self_size + decoder.goodbytes(),
             SourceDataRowColumnarDecoder::EmptyRow => self_size,
         }
     }
@@ -1762,10 +1763,8 @@ impl ColumnDecoder<SourceData> for SourceDataColumnarDecoder {
         false
     }
 
-    fn byte_size(&self) -> usize {
-        self.row_decoder.byte_size()
-            + self.err_decoder.get_array_memory_size()
-            + std::mem::size_of::<SourceDataColumnarDecoder>()
+    fn goodbytes(&self) -> usize {
+        self.row_decoder.goodbytes() + ArrayOrd::Binary(self.err_decoder.clone()).goodbytes()
     }
 
     fn stats(&self) -> StructStats {
